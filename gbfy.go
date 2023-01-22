@@ -8,20 +8,27 @@ import (
 
 // Brainfuck is the interpreter state.
 type Brainfuck struct {
-	cells   [3e4]byte     // cells/tape
+	cells   [3e4]byte     // cells
+	d       int           // data pointer for cells access
 	cmds    []byte        // program being executed
-	d, i    int           // data and instruction pointers
+	i       int           // instruction pointer for cmds access
+	loops   map[int]int   // stores index for matching [ or ]
 	in, out *bytes.Buffer // input and output buffers
 }
 
-// New constructs a new Brainfuck interpreter with the given
-// program and input buffer.
-func New(program string, input []byte) *Brainfuck {
-	return &Brainfuck{
-		cmds: []byte(program),
-		in:   bytes.NewBuffer(input),
-		out:  new(bytes.Buffer),
+// New constructs a new Brainfuck interpreter with the given program
+// and input buffer.
+func New(program string, input []byte) (*Brainfuck, error) {
+	cmds, loops, err := parseProgram(program)
+	if err != nil {
+		return nil, err
 	}
+	return &Brainfuck{
+		cmds:  cmds,
+		loops: loops,
+		in:    bytes.NewBuffer(input),
+		out:   new(bytes.Buffer),
+	}, nil
 }
 
 // Run the program loaded into the interpreter.
@@ -62,67 +69,49 @@ func (bf *Brainfuck) eval(cmd byte) error {
 	case ',':
 		// Read value from input and store in current cell.
 		if b, err := bf.in.ReadByte(); err != nil {
-			return errors.New("Program expects more input!")
+			return errors.New("program expects more input")
 		} else {
 			bf.cells[bf.d] = b
 		}
 	case '[':
-		// Loop start. Continue through loop body if current cell
-		// is non-zero, otehrwise jump to matching ].
+		// Loop start; jump to matching ] if current cell is zero.
 		if bf.cells[bf.d] == 0 {
-			idx, err := findMatchingClose(bf.cmds, bf.i)
-			if err != nil {
-				return fmt.Errorf("Invalid program! %v", err)
-			}
-			bf.i = idx
+			bf.i = bf.loops[bf.i]
 		}
 	case ']':
-		// Loop end. Jump to matching [ if current cell is non-zero.
+		// Loop end; jump to matching [ if current cell is non-zero.
 		if bf.cells[bf.d] != 0 {
-			idx, err := findMatchingOpen(bf.cmds, bf.i)
-			if err != nil {
-				return fmt.Errorf("Invalid program! %v", err)
-			}
-			bf.i = idx
+			bf.i = bf.loops[bf.i]
 		}
-	default:
-		// TODO: Consider stripping non-brainfuck characters in pre-processing.
-		// Technically they are valid in BF programs and should be treated as comments.
-		return fmt.Errorf("Invalid program! Unknown command %q", cmd)
 	}
 	return nil
 }
 
-func findMatchingClose(cmds []byte, i int) (int, error) {
-	var opens int
-	for i < len(cmds) {
-		switch cmds[i] {
-		case '[':
-			opens++
-		case ']':
-			if opens == 0 {
-				return i, nil
-			}
-			opens--
+func parseProgram(program string) ([]byte, map[int]int, error) {
+	cmds, opens, loops := []byte{}, []int{}, map[int]int{}
+	for _, cmd := range program {
+		switch cmd {
+		case '[', ']', '<', '>', '+', '-', ',', '.':
+			cmds = append(cmds, byte(cmd))
 		}
-		i++
 	}
-	return 0, fmt.Errorf("Missing matching ] for [ at %d", i)
-}
-
-func findMatchingOpen(cmds []byte, i int) (int, error) {
-	var closes int
-	for i >= 0 {
-		switch cmds[i] {
-		case '[':
-			if closes == 0 {
-				return i, nil
+	for i, cmd := range cmds {
+		if cmd == '[' {
+			opens = append(opens, i)
+		} else if cmd == ']' {
+			if len(opens) == 0 {
+				return nil, nil, fmt.Errorf("mismatched [ at index %d", i)
 			}
-			closes--
-		case ']':
-			closes++
+			// Remove matching [.
+			j := opens[len(opens)-1]
+			opens = opens[:len(opens)-1]
+			// Store mapping.
+			loops[i] = j
+			loops[j] = i
 		}
-		i--
 	}
-	return 0, fmt.Errorf("Missing matching [ for ] at %d", i)
+	if len(opens) > 0 {
+		return nil, nil, errors.New("unclosed [ at end of program")
+	}
+	return cmds, loops, nil
 }

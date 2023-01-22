@@ -44,7 +44,7 @@ func TestEval(t *testing.T) {
 		// Hmm, we can't really test [ and ] with eval ...
 	}
 
-	bf := New("", []byte{4, 8, 15, 16, 23, 41})
+	bf, _ := New("", []byte{4, 8, 15, 16, 23, 41})
 	if err := checkInterpreter(bf, 0, 0, nil, nil); err != nil {
 		t.Fatalf("[0] Unexpected interpreter state: %v", err)
 	}
@@ -77,4 +77,68 @@ func checkInterpreter(bf *Brainfuck, i, d int, cells map[int]byte, out []byte) e
 		return fmt.Errorf("output diff (-want +got): %s", diff)
 	}
 	return nil
+}
+
+func TestParseProgram(t *testing.T) {
+	invalidLoops := []string{"]", "[]]", "[", "[]["}
+	for _, test := range invalidLoops {
+		_, err := New(test, nil)
+		if err == nil {
+			t.Errorf("Parsed invalid program %q; expected error", test)
+		}
+	}
+}
+
+func TestLoops(t *testing.T) {
+	// Program computes sum of two adjanct cells, read from input.
+	program := ",>,[<+>-]<."
+	tests := []struct {
+		input, want []byte
+	}{
+		{[]byte{3, 2}, []byte{5}},
+		{[]byte{2, 3}, []byte{5}},
+		{[]byte{3, 3}, []byte{6}},
+		{[]byte{0, 0}, []byte{0}},
+	}
+	for _, test := range tests {
+		bf, err := New(program, test.input)
+		if err != nil {
+			t.Fatalf("New failed: %v", err)
+		}
+		out, err := bf.Run()
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if diff := cmp.Diff(test.want, out); diff != "" {
+			t.Errorf("Mismatched output data (-want +got):\n%s", diff)
+		}
+	}
+}
+
+func TestHelloWorld(t *testing.T) {
+	program := `
+		>++++++++[<+++++++++>-]<.
+		>++++[<+++++++>-]<+.
+		+++++++..
+		+++.
+		>>++++++[<+++++++>-]<++.
+		------------.
+		>++++++[<+++++++++>-]<+.
+		<.
+		+++.
+		------.
+		--------.
+		>>>++++[<++++++++>-]<+.`
+
+	bf, err := New(program, nil)
+	if err != nil {
+		t.Fatalf("New failed: %v", err)
+	}
+	out, err := bf.Run()
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+	if diff := cmp.Diff("Hello, World!", string(out)); diff != "" {
+		t.Errorf("Mismatched output data (-want +got):\n%s", diff)
+	}
 }
