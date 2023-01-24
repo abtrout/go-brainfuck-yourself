@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // Brainfuck is the interpreter state.
@@ -40,6 +41,29 @@ func (bf *Brainfuck) Run() ([]byte, error) {
 		bf.i++
 	}
 	return bf.out.Bytes(), nil
+}
+
+// String dumps the Brainfuck interpreter state for debugging.
+func (bf *Brainfuck) String() string {
+	var s strings.Builder
+	s.WriteString(fmt.Sprintf("pointers: [d=%d i=%d]\n", bf.d, bf.i))
+	s.WriteString("non-zero cells: {\n")
+	// TODO: Better cell printing.
+	for i, c := range bf.cells {
+		if c != 0 {
+			s.WriteString(fmt.Sprintf("  %d: %d\n", i, c))
+		}
+	}
+	s.WriteString("}")
+	return s.String()
+}
+
+// Reset the interpreter state to defaults.
+func (bf *Brainfuck) Reset() {
+	bf.cells = [3e4]byte{}
+	bf.i = 0
+	bf.d = 0
+	bf.cmds = nil
 }
 
 // eval evaluates a single Brainfuck command.
