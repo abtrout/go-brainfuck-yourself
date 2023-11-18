@@ -2,8 +2,10 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 
@@ -19,8 +21,6 @@ var (
 func main() {
 	flag.Parse()
 
-	// Read contents of codeFile and inputFile to get commands
-	// to execute and any input data the program may expect.
 	var (
 		err   error
 		cmds  []byte
@@ -39,51 +39,72 @@ func main() {
 		}
 	}
 
-	bf, err := gbfy.New(string(cmds), input)
+	var output bytes.Buffer
+	bf := gbfy.New(bytes.NewBuffer(input), &output)
 	if err != nil {
 		log.Fatalf("Failed to initialize interpreter: %v", err)
 	}
 
-	output, err := bf.Run()
-	if err != nil {
-		log.Printf("Run failed with error: %v", err)
+	if len(cmds) > 0 {
+		for _, cmd := range cmds {
+			if err := bf.Eval(cmd); err != nil {
+				log.Fatalf("Failed to Eval command %q: %v", cmd, err)
+			}
+		}
+		log.Printf("Output from execution: %v\n", output.Bytes())
 	}
 
-	log.Printf("Output from execution: %q\n", output)
-
-	// Drop user into interactive "REPL" if requested. Execution
-	// may continue in the REPL with whatever interpreter state
-	// state the above program left it in.
 	if *launchREPL {
-		log.Println("... starting interactive REPL")
-		beInteractive(bf)
+		log.Println("Starting interactive REPL")
+		repl(bf)
 	}
 }
 
-const welcomeMsg = `Welcome!
+const (
+	welcomeMsg = `Welcome!
  :q[uit] to exit REPL loop 
  :d[ump] to dump interpreter state
  :f[uck] to reset interpreter state`
 
-func beInteractive(bf *gbfy.Brainfuck) {
+	prompt = "gbfy> "
+)
+
+func repl(bf *gbfy.Brainfuck) {
 	fmt.Println(welcomeMsg)
 	in := bufio.NewReader(os.Stdin)
 	for {
-		fmt.Print("gbfy> ")
-		line, _ := in.ReadString('\n')
-		if line[0] == ':' {
-			// Handle REPL commands.
+		fmt.Print(prompt)
+		line, err := in.ReadString('\n')
+		if err == io.EOF {
+			fmt.Println("")
+			return
+		} else if err != nil {
+			log.Fatalf("Error! %v", err)
+		}
+
+		if len(line) > 0 && line[0] == ':' {
 			switch line[1] {
-			case 'q': // exit REPL loop.
-				return
-			case 'd': // dump state to stdout.
-				fmt.Println(bf.String())
-			case 'f': // reset interpreter.
+			case 'd':
+				replDump(bf)
+			case 'f':
 				bf.Reset()
-				fmt.Println("Restarted interpreter...")
+				fmt.Println("Reset interpreter!")
+			case 'q':
+				return
 			}
 		} else {
-			// Handle a Brainfuck command(s).
+			for _, cmd := range []byte(line) {
+				if err := bf.Eval(cmd); err != nil {
+					log.Fatalf("Failed to Eval command %q: %v", cmd, err)
+				}
+			}
 		}
 	}
+}
+
+func replDump(bf *gbfy.Brainfuck) {
+	d, cells, i, cmds, out := bf.Dump()
+	fmt.Printf("Cells; d: %d, current cell value: %x\n", d, cells[d])
+	fmt.Printf("Cmds: i: %d, current command: %q\n", i, cmds[i-1])
+	fmt.Printf("Out: %v\n", out)
 }
