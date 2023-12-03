@@ -61,7 +61,7 @@ func main() {
 }
 
 const (
-	welcomeMsg = `Welcome!
+	welcomeMsg = `Go Brainfuck Yourself!
  :q[uit] to exit REPL loop 
  :d[ump] to dump interpreter state
  :f[uck] to reset interpreter state`
