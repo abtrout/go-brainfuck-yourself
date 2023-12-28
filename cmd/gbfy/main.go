@@ -63,7 +63,7 @@ func repl(bf *gbfy.Brainfuck) {
 
 	for {
 		fmt.Print("gbfy> ")
-		line, err := in.ReadString('\n')
+		line, err := in.ReadBytes('\n')
 		if err == io.EOF {
 			break
 		} else if err != nil {
@@ -81,7 +81,7 @@ func repl(bf *gbfy.Brainfuck) {
 				break
 			}
 		} else {
-			r := bufio.NewReader(bytes.NewReader([]byte(line)))
+			r := bufio.NewReader(bytes.NewReader(line))
 			if err := runCommands(bf, r); err != nil {
 				log.Fatalf("Execution failed: %v", err)
 			}
