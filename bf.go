@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 )
 
 type Brainfuck struct {
@@ -12,27 +13,16 @@ type Brainfuck struct {
 	cmds  []byte    // commands evaluated by the interpreter
 	i     int       // instruction pointer for cmds access
 
-	in, out *bytes.Buffer // input and output buffers
+	in  io.Reader
+	out io.Writer
 
 	loops    map[int]int // stores index for matching [ or ]
 	parLoops []int       // indices for not-yet-complete loops
 }
 
 // New returns a new Brainfuck interpreter.
-func New(in, out *bytes.Buffer) *Brainfuck {
+func New(in io.Reader, out io.Writer) *Brainfuck {
 	return &Brainfuck{in: in, out: out, loops: map[int]int{}}
-}
-
-// Run runs a Brainfuck program and returns output bytes or error.
-func Run(program string, in *bytes.Buffer) ([]byte, error) {
-	var out bytes.Buffer
-	bf := New(in, &out)
-	for _, cmd := range []byte(program) {
-		if err := bf.Eval(cmd); err != nil {
-			return nil, err
-		}
-	}
-	return out.Bytes(), nil
 }
 
 // Eval evaluates a single command with the given interpreter.
@@ -85,12 +75,15 @@ func (bf *Brainfuck) eval() error {
 		case '-':
 			bf.cells[bf.d]--
 		case '.':
-			bf.out.WriteByte(bf.cells[bf.d])
+			if _, err := bf.out.Write([]byte{bf.cells[bf.d]}); err != nil {
+				return fmt.Errorf("failed to Write output: %v", err)
+			}
 		case ',':
-			if b, err := bf.in.ReadByte(); err != nil {
-				return fmt.Errorf("failed to readDataVal: %v", err)
+			input := make([]byte, 1)
+			if _, err := bf.in.Read(input); err != nil {
+				return fmt.Errorf("failed to Read input: %v", err)
 			} else {
-				bf.cells[bf.d] = b
+				bf.cells[bf.d] = input[0]
 			}
 		case '[':
 			if bf.cells[bf.d] == 0 {
@@ -107,8 +100,8 @@ func (bf *Brainfuck) eval() error {
 }
 
 // Dump interpreter state to caller.
-func (bf *Brainfuck) Dump() (int, []byte, int, []byte, []byte) {
-	return bf.d, bf.cells[:], bf.i, bf.cmds, bf.out.Bytes()
+func (bf *Brainfuck) Dump() (int, []byte, int, []byte) {
+	return bf.d, bf.cells[:], bf.i, bf.cmds
 }
 
 // Reset interpreter state.
@@ -121,4 +114,16 @@ func (bf *Brainfuck) Reset() {
 
 	bf.loops = map[int]int{}
 	bf.parLoops = nil
+}
+
+// Run runs a Brainfuck program and returns output bytes or error.
+func Run(cmds []byte, in io.Reader) ([]byte, error) {
+	var out bytes.Buffer
+	bf := New(in, &out)
+	for _, cmd := range cmds {
+		if err := bf.Eval(cmd); err != nil {
+			return nil, err
+		}
+	}
+	return out.Bytes(), nil
 }

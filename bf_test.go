@@ -55,21 +55,24 @@ func TestEval(t *testing.T) {
 
 	var out bytes.Buffer
 	bf := New(bytes.NewBuffer([]byte{4, 8, 15, 16, 23, 41}), &out)
-	if err := checkInterpreter(bf, 0, 0, nil, nil); err != nil {
+	if err := checkInterpreter(bf, 0, 0, nil); err != nil {
 		t.Fatalf("[0] Unexpected interpreter state: %v", err)
 	}
 
 	for i, test := range tests {
 		if err := bf.Eval(test.cmd); err != nil {
-			t.Fatalf("[%d] Eval(%q) failed with error: %v", i+1, test.cmd, err)
+			t.Fatalf("[%d] Eval(%q) failed with error: %v", i, test.cmd, err)
 		}
-		if err := checkInterpreter(bf, test.i, test.d, test.cells, test.out); err != nil {
-			t.Errorf("[%d] Unexpected interpreter state: %v", i+1, err)
+		if err := checkInterpreter(bf, test.i, test.d, test.cells); err != nil {
+			t.Fatalf("[%d] Unexpected interpreter state: %v", i, err)
+		}
+		if diff := cmp.Diff(test.out, out.Bytes()); diff != "" {
+			t.Fatalf("[%d] output diff (-want +got): %s", i, diff)
 		}
 	}
 }
 
-func checkInterpreter(bf *Brainfuck, i, d int, cells map[int]byte, out []byte) error {
+func checkInterpreter(bf *Brainfuck, i, d int, cells map[int]byte) error {
 	if bf.i != i {
 		return fmt.Errorf("instruction pointer; got %d, want %d", bf.i, i)
 	}
@@ -81,17 +84,13 @@ func checkInterpreter(bf *Brainfuck, i, d int, cells map[int]byte, out []byte) e
 			return fmt.Errorf("cell value at index %d; got %d, want %d", idx, got, want)
 		}
 	}
-	if diff := cmp.Diff(out, bf.out.Bytes()); diff != "" {
-		return fmt.Errorf("output diff (-want +got): %s", diff)
-	}
 	return nil
 }
 
 func TestInvalidLoopHandling(t *testing.T) {
-	invalidLoops := []string{"]", "[]]", "[][]]"}
-	for _, test := range invalidLoops {
-		_, err := Run(test, nil)
-		if err == nil {
+	tests := []string{"]", "[]]", "[][]]"}
+	for _, test := range tests {
+		if _, err := Run([]byte(test), nil); err == nil {
 			t.Errorf("Parsed invalid program %q; expected error", test)
 		}
 	}
@@ -112,7 +111,7 @@ func TestHelloWorld(t *testing.T) {
 		--------.
 		>>>++++[<++++++++>-]<+.`
 
-	out, err := Run(program, nil)
+	out, err := Run([]byte(program), nil)
 	if err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
