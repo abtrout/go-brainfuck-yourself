@@ -104,18 +104,6 @@ func (bf *Brainfuck) Dump() (int, []byte, int, []byte) {
 	return bf.d, bf.cells[:], bf.i, bf.cmds
 }
 
-// Reset interpreter state.
-func (bf *Brainfuck) Reset() {
-	bf.d = 0
-	bf.cells = [len(bf.cells)]byte{}
-
-	bf.i = 0
-	bf.cmds = nil
-
-	bf.loops = map[int]int{}
-	bf.parLoops = nil
-}
-
 // Run runs a Brainfuck program and returns output bytes or error.
 func Run(cmds []byte, in io.Reader) ([]byte, error) {
 	var out bytes.Buffer

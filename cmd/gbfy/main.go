@@ -13,9 +13,9 @@ import (
 )
 
 var (
-	codeFile       = flag.String("f", "", "Path to Brainfuck program to execute")
-	dataFile       = flag.String("d", "", "Path to file containing input data for program")
-	endInteractive = flag.Bool("i", false, "Launch interactive interpreter before exit")
+	codeFile   = flag.String("f", "", "Path to Brainfuck program to execute")
+	dataFile   = flag.String("d", "", "Path to file containing input data for program")
+	launchRepl = flag.Bool("i", false, "Launch interactive interpreter before exit")
 )
 
 func main() {
@@ -35,17 +35,15 @@ func main() {
 		if err := runCodeFile(bf); err != nil {
 			log.Fatalf("Execution failed: %v", err)
 		}
-		log.Printf("Output from execution: %v\n", out.Bytes())
-	} else {
-		if err := runPiped(bf); err != nil {
-			log.Fatalf("Execution failed: %v", err)
-		}
-		log.Printf("Output from execution: %v\n", out.Bytes())
+	} else if err := runPiped(bf); err != nil {
+		log.Fatalf("Execution failed: %v", err)
 	}
 
-	if *endInteractive {
+	if *launchRepl {
 		log.Println("Starting interactive REPL ...")
-		repl(bf, &out)
+		repl(bf, &in, &out)
+	} else {
+		log.Printf("Output from execution: %v\n", out.Bytes())
 	}
 }
 
@@ -54,7 +52,7 @@ const welcomeMsg = `Go Brainfuck Yourself!
  :f[uck] to reset interpreter state
  :q[uit] to exit REPL loop`
 
-func repl(bf *gbfy.Brainfuck, out *bytes.Buffer) {
+func repl(bf *gbfy.Brainfuck, in, out *bytes.Buffer) {
 	fmt.Println(welcomeMsg)
 
 	f, err := os.Open("/dev/tty")
@@ -81,7 +79,8 @@ func repl(bf *gbfy.Brainfuck, out *bytes.Buffer) {
 			case 'd':
 				formatDump(bf, out.Bytes())
 			case 'f':
-				bf.Reset()
+				out.Reset() // reset output buffer!
+				bf = gbfy.New(in, out)
 				fmt.Println("Reset interpreter!")
 			case 'q':
 				break
