@@ -3,6 +3,7 @@ package gbfy
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -118,4 +119,41 @@ func TestHelloWorld(t *testing.T) {
 	if diff := cmp.Diff("Hello, World!", string(out)); diff != "" {
 		t.Errorf("Mismatched output data (-want +got):\n%s", diff)
 	}
+}
+
+func TestCellWrapping(t *testing.T) {
+	bf := New(nil, nil)
+	// Move to the right .... 3e4 - 1 times.
+	for i := 0; i < len(bf.cells)-1; i++ {
+		if err := bf.Eval('>'); err != nil {
+			t.Fatalf("Eval(>) failed with error %v", err)
+		}
+	}
+	if err := checkInterpreter(bf, 29999, 29999, nil); err != nil {
+		t.Fatalf("Unexpected interpreter state: %v", err)
+	}
+	// Move to the right once more -- should wrap!
+	if err := bf.Eval('>'); err != nil {
+		t.Fatalf("Eval(>) failed with error %v", err)
+	} else if err := checkInterpreter(bf, 30000, 0, nil); err != nil {
+		t.Fatalf("Unexpected interpreter state: %v", err)
+	}
+	// Move to the left -- should wrap!
+	if err := bf.Eval('<'); err != nil {
+		t.Fatalf("Eval(<) failed with error %v", err)
+	}
+	if err := checkInterpreter(bf, 30001, 29999, nil); err != nil {
+		t.Fatalf("Unexpected interpreter state: %v", err)
+	}
+}
+
+func Run(cmds []byte, in io.Reader) ([]byte, error) {
+	var out bytes.Buffer
+	bf := New(in, &out)
+	for _, cmd := range cmds {
+		if err := bf.Eval(cmd); err != nil {
+			return nil, err
+		}
+	}
+	return out.Bytes(), nil
 }
